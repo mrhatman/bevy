@@ -324,3 +324,96 @@ impl From<Icosphere> for Mesh {
         mesh
     }
 }
+
+/// A height map on the XZ plane.
+#[derive(Debug)]
+pub struct HeightMap {
+    /// The total side length of the square.
+    pub size: f32,
+    /// Number of sample points per side
+    pub sample_count: u32,
+    //height function that takes in (x_world_space,z_world_space, x_index, z_index) and returns the y_height in world space
+    pub height_function:  fn(f32,f32,u32,u32) -> f32
+
+
+
+}
+
+impl From<HeightMap> for Mesh {
+    fn from(height_map: HeightMap) -> Self {
+
+
+
+        let mut positions = Vec::new();
+        let mut normals = Vec::new();
+        let mut uvs = Vec::new();
+
+        let extent = height_map.size / 2.0;
+
+        for z_index in 0..height_map.sample_count{
+            for x_index in 0..height_map.sample_count{
+                let x_scale = x_index as f32/ (height_map.sample_count -1) as f32;
+                let z_scale = z_index as f32/ (height_map.sample_count -1) as f32;
+                let x_world = ( x_scale * height_map.size) - extent;
+                let z_world = ( z_scale * height_map.size) - extent;
+
+                let height = (height_map.height_function)(x_world,z_world,x_index,z_index);
+
+                positions.push( [x_world,height,z_world] );
+                uvs.push([x_scale,z_scale]);
+            }
+        }
+        let mut indices = Vec::new();
+
+        for z in 0..(height_map.sample_count ){
+            for x in 0..(height_map.sample_count ){
+                let i = (z * height_map.sample_count) + x;
+
+                if x !=  height_map.sample_count -1 &&  z !=  height_map.sample_count -1 {
+                    indices.push(i);
+                    indices.push(i + height_map.sample_count + 1);
+                    indices.push(i + 1);
+
+                    indices.push(i);
+                    indices.push(i + height_map.sample_count);
+                    indices.push(i + height_map.sample_count + 1);
+                }
+
+                let z_vec = if z == 0{
+                     Vec3::new( 0.0,positions[i  as usize + height_map.sample_count as usize][1] - positions[i  as usize ][1] , (height_map.size/height_map.sample_count as f32))
+                } else if z == height_map.sample_count -1{
+                    Vec3::new( 0.0,positions[i as usize][1] - positions[i  as usize - height_map.sample_count  as usize][1] , (height_map.size/height_map.sample_count as f32))
+                }
+                else{
+                    Vec3::new( 0.0,positions[i  as usize+ height_map.sample_count  as usize][1] - positions[i  as usize - height_map.sample_count  as usize][1] , 2.0 * (height_map.size/height_map.sample_count as f32))
+
+                };
+
+                let x_vec = if x == 0{
+                     Vec3::new( (height_map.size/height_map.sample_count as f32) , positions[i  as usize  + 1][1] - positions[i  as usize][1], 0.0 )
+                } else if x == height_map.sample_count -1 {
+                     Vec3::new( (height_map.size/height_map.sample_count as f32) , positions[i as usize][1] - positions[i  as usize - 1][1], 0.0 )
+                }
+                else{
+                     Vec3::new( 2.0 *(height_map.size/height_map.sample_count as f32) , positions[i  as usize+ 1][1] - positions[i  as usize  - 1][1], 0.0 )
+                };
+
+                let normal = z_vec.cross(x_vec).normalize();
+
+                normals.push([normal.x,normal.y,normal.z]);
+                //normals.push([0.0,1.0,0.0]);
+
+
+
+            }
+        }
+
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.set_indices(Some(Indices::U32(indices)));
+        mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh
+    }
+}
+
